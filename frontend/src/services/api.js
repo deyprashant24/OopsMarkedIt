@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = "http://localhost:5012/api"; // Aapka updated port
+const API_URL = "https://oopsmarked-backend.onrender.com/api"; // Aapka updated port
 
 const api = axios.create({
   baseURL: API_URL,
