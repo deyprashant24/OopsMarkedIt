@@ -87,40 +87,43 @@ export default function Sidebar() {
         </div>
       </div>
       
-      {/* 🚀 BOTTOM SECTION: Clean Avatar & Hidden Logout */}
-      <div className="p-4 mt-auto shrink-0">
+      {/* 🚀 BOTTOM SECTION: Profile & Always Visible Logout */}
+      <div className="p-4 mt-auto shrink-0 flex flex-col gap-2">
+        
+        {/* User Details Box */}
         <div className="flex items-center p-2 rounded-2xl bg-white/5 border border-white/10 overflow-hidden hover:bg-white/10 transition-colors">
-          
-          {/* Avatar (Always 32x32px) */}
+          {/* Avatar */}
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-400 to-blue-600 flex items-center justify-center font-bold text-sm shadow-md shrink-0 text-white uppercase">
             {user?.name?.charAt(0) || 'A'}
           </div>
 
-          {/* User Details & Logout (Takes 0px when collapsed) */}
-          <div className="flex items-center justify-between overflow-hidden transition-all duration-300 max-w-0 opacity-0 group-hover/sidebar:max-w-[180px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3 group-hover/sidebar:flex-1">
-            
-            <div className="flex flex-col truncate pr-2">
-              <span className="text-sm font-bold text-white truncate">{user?.name || 'Admin'}</span>
-              <span className="text-[10px] text-blue-200/60 truncate">My Workspace</span>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              title="Log Out"
-              className="p-1.5 text-blue-200/60 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
-            >
-              <LogOut size={16} />
-            </button>
-            
+          {/* User Name & Subtext */}
+          <div className="flex flex-col justify-center overflow-hidden transition-all duration-300 max-w-0 opacity-0 group-hover/sidebar:max-w-[150px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3">
+            <span className="text-sm font-bold text-white truncate">{user?.name || 'Admin'}</span>
+            <span className="text-[10px] text-blue-200/60 truncate">My Workspace</span>
           </div>
-
         </div>
+
+        {/* Logout Button (Fixed for Mobile!) */}
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 border border-transparent overflow-hidden text-red-400 hover:bg-red-500/10 hover:text-red-300"
+        >
+          {/* Icon is ALWAYS visible */}
+          <span className="shrink-0 w-6 flex justify-center"><LogOut size={20} /></span>
+          
+          {/* Text is visible on hover/PC */}
+          <span className="transition-all duration-300 overflow-hidden max-w-0 opacity-0 group-hover/sidebar:max-w-[150px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3 text-sm whitespace-nowrap font-medium">
+            Log Out
+          </span>
+        </button>
+
       </div>
     </aside>
   );
 }
 
-// 🚀 REUSABLE NAV ITEM (With text collapsing fix)
+// 🚀 REUSABLE NAV ITEM
 function NavItem({ to, icon, label, active }) {
   return (
     <Link 
