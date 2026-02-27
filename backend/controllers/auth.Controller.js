@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs'); // 👈 Password compare aur hash karne ke liye naya import
+const bcrypt = require('bcryptjs'); 
 
 // @desc    Register a new user
 exports.register = async (req, res) => {
@@ -23,10 +23,11 @@ exports.login = async (req, res) => {
 
     const maxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
 
+    // 🚀 UPDATED: Cross-domain cookies ke liye settings
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,      // Vercel-Render ke liye true hona zaroori hai
+      sameSite: 'none',  // Cross-origin request ke liye 'none' zaroori hai
       maxAge: maxAge,
     });
 
@@ -58,7 +59,13 @@ exports.getMe = async (req, res) => {
 
 // @desc    Logout user
 exports.logout = (req, res) => {
-  res.cookie('token', '', { httpOnly: true, expires: new Date(0) });
+  // 🚀 UPDATED: Logout mein bhi same flags hone chahiye tabhi cookie delete hogi
+  res.cookie('token', '', { 
+    httpOnly: true, 
+    expires: new Date(0),
+    secure: true, 
+    sameSite: 'none' 
+  });
   res.json({ success: true, message: 'Logged out successfully' });
 };
 
@@ -74,7 +81,10 @@ exports.forgotPassword = async (req, res) => {
     const resetToken = user.getResetPasswordToken();
     await user.save(); // Token and Expire save ho jayenge
 
-    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+    // 🚀 UPDATED: Hardcoded localhost ki jagah dynamic Vercel URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+
     const message = `You have requested a password reset for your OopsMarkedIt account. \n\nPlease click the link below to reset it: \n\n ${resetUrl}`;
 
     try {
@@ -110,12 +120,10 @@ exports.resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or expired token' });
     }
 
-    // Naya password set karein (Hook automatically hash karega)
     user.password = req.body.password; 
     user.resetPasswordToken = null;
     user.resetPasswordExpire = null;
     
-    // Save zaroori hai hook trigger karne ke liye
     await user.save();
 
     res.status(200).json({ success: true, message: 'Password updated successfully' });
@@ -127,8 +135,12 @@ exports.resetPassword = async (req, res) => {
 // @desc    Google OAuth Callback
 exports.googleAuthCallback = (req, res) => {
   const user = req.user;
+  
+  // 🚀 UPDATED: Dynamic Frontend URL for Redirects
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
   if (!user) {
-    return res.redirect('http://localhost:5173/login?error=auth_failed');
+    return res.redirect(`${frontendUrl}/login?error=auth_failed`);
   }
 
   const token = jwt.sign(
@@ -137,36 +149,31 @@ exports.googleAuthCallback = (req, res) => {
     { expiresIn: '7d' }
   );
 
+  // 🚀 UPDATED: Cross-domain cookie settings for Google Login
   res.cookie('token', token, {
     httpOnly: true,
-    secure: false, // Testing ke liye false
-    sameSite: 'lax',
+    secure: true, 
+    sameSite: 'none',
     maxAge: 7 * 24 * 60 * 60 * 1000, 
   });
 
-  res.redirect('http://localhost:5173/dashboard');
+  res.redirect(`${frontendUrl}/dashboard`);
 };
 
 // @desc    Protect routes (Middleware)
-// Note: Usually ye ek alag middleware file mein hota hai, but aapne yahan rakha hai toh main isko yahi rakh raha hu.
 exports.protect = async (req, res, next) => {
   let token;
 
-  // Check if token exists in cookies
   if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
   }
 
-  // If no token found
   if (!token) {
     return res.status(401).json({ success: false, message: 'Not authorized, no token' });
   }
 
   try {
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Add user info (id, role) from payload to request object
     req.user = decoded; 
     next();
   } catch (error) {
@@ -175,12 +182,10 @@ exports.protect = async (req, res, next) => {
 };
 
 // ==========================================
-// 🚀 NAYE SETTINGS PAGE WALE FUNCTIONS YAHAN HAIN
+// 🚀 SETTINGS PAGE WALE FUNCTIONS
 // ==========================================
 
 // @desc    Update user details (Name)
-// @route   PUT /api/auth/updatedetails
-// @access  Private
 exports.updateDetails = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
@@ -188,7 +193,6 @@ exports.updateDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Sirf name update karenge
     user.name = req.body.name || user.name;
     await user.save();
 
@@ -204,16 +208,13 @@ exports.updateDetails = async (req, res) => {
 };
 
 // @desc    Update password
-// @route   PUT /api/auth/updatepassword
-// @access  Private
 exports.updatePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     
-    // 1. User ko nikalo DB se aur explicitly 'password' field ko shamil karo (agar wo hidden hai)
     const user = await User.findOne({
       where: { id: req.user.id },
-      attributes: { include: ['password'] } // 👈 Ye bohot zaroori hai
+      attributes: { include: ['password'] }
     });
 
     if (!user) {
@@ -224,14 +225,11 @@ exports.updatePassword = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Google logged-in users cannot change password here.' });
     }
 
-    // 2. Check if current password matches
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Incorrect current password' });
     }
 
-    // 3. Naya plain password assign karo.
-    // Aapke User model ka hook isko automatically hash kar dega (jaise resetPassword mein karta hai)
     user.password = newPassword; 
     await user.save();
 
@@ -243,8 +241,6 @@ exports.updatePassword = async (req, res) => {
 };
 
 // @desc    Delete User Account
-// @route   DELETE /api/auth/deleteaccount
-// @access  Private
 exports.deleteAccount = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id);
@@ -252,12 +248,15 @@ exports.deleteAccount = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // User delete kar do
-    // NOTE: Agar aapke models mein "onDelete: 'CASCADE'" set hai, toh iske marks/collections auto delete ho jayenge.
     await user.destroy();
     
-    // Cookie bhi clear kar do logout effect ke liye
-    res.cookie('token', '', { httpOnly: true, expires: new Date(0) });
+    // 🚀 UPDATED: Account delete karne par bhi cookie properly clear karni hogi
+    res.cookie('token', '', { 
+      httpOnly: true, 
+      expires: new Date(0),
+      secure: true,
+      sameSite: 'none'
+    });
 
     res.status(200).json({ success: true, message: 'Account deleted permanently' });
   } catch (error) {
